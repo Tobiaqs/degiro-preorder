@@ -68,10 +68,6 @@ def price_aggregator():
 
 Thread(target=price_aggregator, daemon=True).start()
 
-# determine whether an order has been created for preorder
-def is_order_created(preorder):
-    return 'order_created' in preorder and preorder['order_created'] == True
-
 # DEGIRO limits
 def is_order_valid(preorder, last_price, use_margins=True):
     if 'order_created' in preorder and preorder['order_created'] == True:
