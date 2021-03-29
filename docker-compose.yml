@@ -1,0 +1,9 @@
+version: "3.9"
+services:
+  app:
+    restart: always
+    build: .
+    volumes:
+      - ./status.json:/app/status.json
+    env_file:
+      - .env
