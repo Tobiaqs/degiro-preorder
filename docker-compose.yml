@@ -4,6 +4,6 @@ services:
     restart: always
     build: .
     volumes:
-      - ./status.json:/app/status.json
+      - ./preorders.json:/app/preorders.json
     env_file:
       - .env

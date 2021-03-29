@@ -1,30 +1,28 @@
-# degiro-autosell
+# degiro-preorder
 
-## Why does this tool exist
-On DEGIRO it is not possible to create limit sell orders with target price > current price x 1.2. This tool creates orders as soon as the current price crosses the threshold for order creation to be possible.
+## Why does this tool exists
+On DEGIRO it is not possible to create limit orders with a target price that differs significantly from the last price. This tool creates orders as soon as the current price crosses the threshold for order creation to become possible.
 
 ## Limitations
 Only works on US securities when using Finnhub.io free account.
 
 Stability is unknown.
 
-The Python library degiro-connector currently does not work properly so this tool uses my own fork of this library.
-
-## How to use
+## Configuration
 Obtain a Finnhub.io API key. Obtain a DEGIRO account with holdings, collect username, password and intaccount credentials. Set environment variables in `.env` accordingly.
 
-Create a file called `status.json` (based on `status.json.example`) on a Python-writable location. Refer to it in `.env`.
+Create a file called `preorders.json` (based on `preorders.json.example`) on a Python-writable location. Refer to it in `.env`.
 
-`product_id` is used to identify the security at DEGIRO.
+`product_id` is used to identify the security at DEGIRO. Can be grabbed from URL in the web application.
 
 `product_ticker` is used to identify the security at Finnhub.io.
 
-The example status.json does the following:
+The example preorders.json means the following:
 
-- As soon as it becomes possible to create a limit sell order for AAPL for 130$, create a limit sell order for 130$, for 1 share.
-- As soon as it becomes possible to create a limit sell order for AAPL for 145.30$, create a limit sell order for 145.30$, for 30 shares.
-- As soon as it becomes possible to create a limit sell order for AAPL for 173.43$, create a limit sell order for 173.43$, for 50 shares.
+- As soon as it becomes possible to create a limit buy order for AAPL for 90$, create a limit buy order for 90$, for 20 shares, that expires at EOD.
+- As soon as it becomes possible to create a limit sell order for AAPL for 130.54$, create a limit sell order for 130.54$, for 31 shares, that does not expire until canceled.
 
+## How to run
 To run in background with Docker Compose:
 
 ```

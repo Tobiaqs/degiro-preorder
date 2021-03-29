@@ -1,0 +1,18 @@
+[
+    {
+        "product_id": 331868,
+        "product_ticker": "AAPL",
+        "price": 90,
+        "amount": 20,
+        "action": "BUY",
+        "time_type": "GOOD_TILL_DAY"
+    },
+    {
+        "product_id": 331868,
+        "product_ticker": "AAPL",
+        "price": 130.54,
+        "amount": 31,
+        "action": "SELL",
+        "time_type": "GOOD_TILL_CANCELED"
+    }
+]
