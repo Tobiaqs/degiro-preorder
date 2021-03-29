@@ -25,9 +25,14 @@ The example status.json does the following:
 - As soon as it becomes possible to create a limit sell order for AAPL for 145.30$, create a limit sell order for 145.30$, for 30 shares.
 - As soon as it becomes possible to create a limit sell order for AAPL for 173.43$, create a limit sell order for 173.43$, for 50 shares.
 
-To run with Pipenv:
+To run in background with Docker Compose:
 
 ```
-$ pipenv install
-$ pipenv run python app.py
+$ docker-compose up --build -d
+```
+
+For foreground/development use:
+
+```
+$ docker-compose up --build
 ```
