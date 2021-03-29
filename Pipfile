@@ -1,13 +1,13 @@
 [[source]]
-url = "https://pypi.python.org/simple"
+url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
+
+[packages]
+websocket-client = "*"
+degiro-connector = {git = "https://github.com/Chavithra/degiro-connector"}
 
 [dev-packages]
 
 [requires]
 python_version = "3.8"
-
-[packages]
-websocket-client = "*"
-degiro-connector = {git = "https://github.com/Tobiaqs/degiro-connector.git"}
