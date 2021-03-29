@@ -1,6 +1,6 @@
 import os, websocket, time
 from json import loads, load, dump
-from threading import Thread, Lock
+from threading import Thread
 from datetime import datetime
 from queue import Queue
 from signal import signal, SIGTERM
@@ -64,7 +64,7 @@ def price_aggregator():
         if v_sum > 0:
             on_price_update(pv_sum / v_sum)
 
-        time.sleep(1)
+        time.sleep(5)
 
 Thread(target=price_aggregator, daemon=True).start()
 
