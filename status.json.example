@@ -1,0 +1,22 @@
+{
+    "sell_points": [
+        {
+            "product_id": 331868,
+            "product_ticker": "AAPL",
+            "price": 130,
+            "amount": 1
+        },
+        {
+            "product_id": 331868,
+            "product_ticker": "AAPL",
+            "price": 145.30,
+            "amount": 30
+        },
+        {
+            "product_id": 331868,
+            "product_ticker": "AAPL",
+            "price": 173.43,
+            "amount": 50
+        }
+    ]
+}
