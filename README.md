@@ -1,6 +1,6 @@
 # degiro-preorder
 
-## Why does this tool exists
+## Why this tool exists
 On DEGIRO it is not possible to create limit orders with a target price that differs significantly from the last price. This tool creates orders as soon as the current price crosses the threshold for order creation to become possible.
 
 ## Limitations
