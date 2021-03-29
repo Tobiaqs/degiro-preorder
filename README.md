@@ -34,3 +34,5 @@ For foreground/development use:
 ```
 $ docker-compose up --build
 ```
+
+The container is automatically restarted by Docker in case the application crashes or websocket disconnects.
