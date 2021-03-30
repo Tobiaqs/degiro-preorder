@@ -152,6 +152,7 @@ def on_ws_open(ws):
     # subscribe to the tickers
     for ticker in tickers:
         ws.send(f'{{"type":"subscribe","symbol":"{ticker}"}}')
+        print(f'subscribed to {ticker} data from Finnhub')
 
     print('connected to Finnhub WS')
 
