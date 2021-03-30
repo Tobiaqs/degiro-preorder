@@ -37,11 +37,16 @@ print('connected to DEGIRO API')
 preorders = load(open(PREORDERS_FILE, 'r'))
 dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
 
-# poll trading_api periodically to keep session alove
+# poll trading_api periodically to keep session alive
 def request_account_info_periodically():
     while True:
-        time.sleep(600)
-        trading_api.get_account_info()
+        time.sleep(60)
+        try:
+            trading_api.get_account_info()
+        except TimeoutError:
+            print('timeout error, reconnecting!')
+            trading_api.connect()
+            trading_api.get_account_info()
 
 Thread(target=request_account_info_periodically, daemon=True).start()
 
