@@ -39,9 +39,9 @@ dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
 
 # poll trading_api periodically to keep session alove
 def request_account_info_periodically():
-    time.sleep(60)
-    trading_api.get_account_info()
-    print('polled DEGIRO API')
+    while True:
+        time.sleep(600)
+        trading_api.get_account_info()
 
 Thread(target=request_account_info_periodically, daemon=True).start()
 
