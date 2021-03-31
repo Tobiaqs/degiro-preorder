@@ -1,4 +1,4 @@
-import os, websocket, time
+import os, websocket, time, logging
 from json import loads, load, dump
 from threading import Thread, Lock
 from datetime import datetime
@@ -20,8 +20,8 @@ def handle_sigterm(*args):
 signal(SIGTERM, handle_sigterm)
 
 # logging
-def write_log(msg):
-    print(f'{datetime.now().isoformat()}\t{msg}')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
+logger = logging.getLogger('degiro-preorder')
 
 # parameters
 PREORDERS_FILE = '/app/preorders.json'
@@ -36,7 +36,7 @@ trading_api_mutex = Lock()
 trading_api = TradingAPI(credentials=credentials)
 trading_api.connect()
 trading_api.get_account_info()
-write_log('I: connected to DEGIRO API')
+logger.info('connected to DEGIRO API.')
 
 # test writing to preorders file
 preorders = load(open(PREORDERS_FILE, 'r'))
@@ -54,7 +54,7 @@ def recreate_trading_api_periodically():
             trading_api.connect()
             trading_api.get_account_info()
         except:
-            write_log('E: failed to recreate TradingAPI')
+            logger.error('failed to recreate TradingAPI.')
         finally:
             trading_api_mutex.release()
 
@@ -65,7 +65,7 @@ def poll_trading_api_periodically():
         try:
             trading_api.get_account_info()
         except:
-            write_log('E: unable to get_account_info from TradingAPI')
+            logger.error('unable to get_account_info from TradingAPI.')
         finally:
             trading_api_mutex.release()
 
@@ -76,20 +76,22 @@ prices_queue = Queue()
 
 def price_aggregator():
     while True:
-        v_sum = 0
-        pv_sum = 0
+        sums = {}
 
         # obtain all readings from the prices_queue
         while True:
             try:
                 price = prices_queue.get(timeout=0.1)
-                v_sum += price['v']
-                pv_sum += price['p'] * price['v']
+                if price['s'] not in sums:
+                    sums[price['s']] = {'v_sum': 0, 'pv_sum': 0}
+                sums[price['s']]['v_sum'] += price['v']
+                sums[price['s']]['pv_sum'] += price['p'] * price['v']
             except:
                 break
         
-        if v_sum > 0:
-            on_price_update(pv_sum / v_sum)
+        for symbol, sums in sums.items():
+            if sums['v_sum'] > 0:
+                on_price_update(symbol, sums['pv_sum'] / sums['v_sum'])
 
         time.sleep(5)
 
@@ -98,6 +100,9 @@ Thread(target=price_aggregator, daemon=True).start()
 # DEGIRO limits
 def is_order_valid(preorder, last_price, use_margins=True):
     if 'order_created' in preorder and preorder['order_created'] == True:
+        return False
+
+    if 'preorder_canceled' in preorder:
         return False
 
     if preorder['time_type'] != 'GOOD_TILL_CANCELED' and preorder['time_type'] != 'GOOD_TILL_DAY':
@@ -112,12 +117,15 @@ def is_order_valid(preorder, last_price, use_margins=True):
     
     return False
 
-def on_price_update(last_price):
+def on_price_update(symbol, last_price):
     preorders = load(open(PREORDERS_FILE, 'r'))
 
     for preorder in preorders:
+        if preorder['product_ticker'] != symbol:
+            continue
+
         if is_order_valid(preorder, last_price):
-            write_log(f'I: creating {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
+            logger.info(f'creating {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}.')
             order = Order(
                 action=Order.Action.SELL if preorder['action'] == 'SELL' else Order.Action.BUY,
                 order_type=Order.OrderType.LIMIT,
@@ -132,19 +140,27 @@ def on_price_update(last_price):
             trading_api_mutex.acquire()
             try:
                 checking_response = trading_api.check_order(order=order)
-                confirmation_id = checking_response.confirmation_id
-                confirmation_response = trading_api.confirm_order(
-                    confirmation_id=confirmation_id,
-                    order=order
-                )
+                if checking_response != False:
+                    confirmation_response = trading_api.confirm_order(
+                        confirmation_id=checking_response.confirmation_id,
+                        order=order
+                    )
 
-                if confirmation_response != False:
-                    write_log('I: created order')
-                    preorder['order_created'] = True
-                    preorder['order_created_utc'] = datetime.utcnow().isoformat()
+                    if confirmation_response != False:
+                        logger.info('created order.')
+                        preorder['order_created'] = True
+                        preorder['order_created_utc'] = datetime.utcnow().isoformat()
+                        dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
+                    else:
+                        logger.warning('order creation failed due to invalid price.')
+                else:
+                    # insufficient funds or shares
+                    logger.warning('order creation failed due to insufficient funds or shares. order canceled.')
+                    preorder['preorder_canceled'] = True
                     dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
-            except:
-                write_log('W: unable to create order')
+            except e:
+                logger.error('unable to create order due to an exception.')
+                logger.error(e)
             finally:
                 trading_api_mutex.release()
 
@@ -152,28 +168,33 @@ def on_ws_message(ws, message):
     # parse the trades object
     trades = loads(message)
 
-    # volume and price*volume sum
-    v_sum = 0
-    pv_sum = 0
+    if 'data' not in trades:
+        return
+
+    # collect sums per symbol
+    sums = {}
 
     # sum all volumes and price*volume products
     for trade in trades['data']:
-        v_sum += trade['v']
-        pv_sum += trade['p'] * trade['v']
+        if trade['s'] not in sums:
+            sums[trade['s']] = {'v_sum': 0, 'pv_sum': 0}
+        sums[trade['s']]['v_sum'] += trade['v']
+        sums[trade['s']]['pv_sum'] += trade['p'] * trade['v']
     
-    # ignore 0-volume trades
-    if v_sum > 0:
-        try:
-            prices_queue.put({'v': v_sum, 'p': pv_sum / v_sum}, timeout=0.1)
-        except:
-            write_log('W: timeout for queue put expired. this should NEVER happen.')
-            pass
+    for symbol, sums in sums.items():
+        # ignore 0-volume trades
+        if sums['v_sum'] > 0:
+            try:
+                prices_queue.put({'v': sums['v_sum'], 'p': sums['pv_sum'] / sums['v_sum'], 's': symbol}, timeout=0.1)
+            except:
+                logger.warning('timeout for queue put expired. this should NEVER happen.')
+                pass
 
 def on_ws_error(ws, error):
-    write_log(f'E: {error}')
+    logger.error(error)
 
 def on_ws_close(ws):
-    write_log('I: websocket disconnected, exiting.')
+    logger.info('websocket disconnected, exiting.')
 
 def on_ws_open(ws):
     # find which tickers to subscribe to on the WS connection
@@ -185,9 +206,9 @@ def on_ws_open(ws):
     # subscribe to the tickers
     for ticker in tickers:
         ws.send(f'{{"type":"subscribe","symbol":"{ticker}"}}')
-        write_log(f'I: subscribed to {ticker} data from Finnhub')
+        logger.info(f'subscribed to {ticker} data from Finnhub.')
 
-    write_log('I: connected to Finnhub WS.')
+    logger.info('connected to Finnhub WS.')
 
 ws = websocket.WebSocketApp(f'wss://ws.finnhub.io?token={FINNHUB_TOKEN}',
                               on_message = on_ws_message,

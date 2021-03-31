@@ -4,9 +4,8 @@
 On DEGIRO it is not possible to create limit orders with a target price that differs significantly from the last price. This tool creates orders as soon as the current price crosses the threshold for order creation to become possible.
 
 ## Limitations
-Only works on US securities when using Finnhub.io free account.
-
-Stability is unknown.
+- Only works on US securities when using Finnhub.io free account.
+- Stability is unknown.
 
 ## Configuration
 Obtain a Finnhub.io API key. Obtain a DEGIRO account with holdings, collect username, password and intaccount credentials. Set environment variables in `.env` accordingly.
@@ -36,3 +35,7 @@ $ docker-compose up --build
 ```
 
 The container is automatically restarted by Docker in case the application crashes or websocket disconnects.
+
+## Future plans
+- Web interface
+- Robustness tweaks based on findings after a few weeks of usage
