@@ -19,6 +19,10 @@ def handle_sigterm(*args):
 
 signal(SIGTERM, handle_sigterm)
 
+# logging
+def write_log(msg):
+    print(f'{datetime.now().isoformat()}\t{msg}')
+
 # parameters
 PREORDERS_FILE = '/app/preorders.json'
 FINNHUB_TOKEN = os.environ['FINNHUB_TOKEN']
@@ -31,7 +35,7 @@ credentials = Credentials(
 trading_api = TradingAPI(credentials=credentials)
 trading_api.connect()
 trading_api.get_account_info()
-print('connected to DEGIRO API')
+write_log('connected to DEGIRO API')
 
 # test writing to preorders file
 preorders = load(open(PREORDERS_FILE, 'r'))
@@ -45,7 +49,7 @@ def request_account_info_periodically():
         try:
             trading_api.get_account_info()
         except TimeoutError:
-            print('timeout error, reconnecting!')
+            write_log('timeout error, reconnecting!')
             trading_api = TradingAPI(credentials=credentials)
             trading_api.connect()
             trading_api.get_account_info()
@@ -97,7 +101,7 @@ def on_price_update(last_price):
 
     for preorder in preorders:
         if is_order_valid(preorder, last_price):
-            print(f'creating {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
+            write_log(f'creating {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
             order = Order(
                 action=Order.Action.SELL if preorder['action'] == 'SELL' else Order.Action.BUY,
                 order_type=Order.OrderType.LIMIT,
@@ -117,7 +121,7 @@ def on_price_update(last_price):
             )
 
             if confirmation_response != False:
-                print(f'created {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
+                write_log(f'created {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
                 preorder['order_created'] = True
                 preorder['order_created_utc'] = datetime.utcnow().isoformat()
                 dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
@@ -140,14 +144,14 @@ def on_ws_message(ws, message):
         try:
             prices_queue.put({'v': v_sum, 'p': pv_sum / v_sum}, timeout=0.1)
         except:
-            print('WARNING: timeout for queue put expired. this should NEVER happen.')
+            write_log('WARNING: timeout for queue put expired. this should NEVER happen.')
             pass
 
 def on_ws_error(ws, error):
-    print(error)
+    write_log(error)
 
 def on_ws_close(ws):
-    print('disconnected')
+    write_log('disconnected')
 
 def on_ws_open(ws):
     # find which tickers to subscribe to on the WS connection
@@ -159,9 +163,9 @@ def on_ws_open(ws):
     # subscribe to the tickers
     for ticker in tickers:
         ws.send(f'{{"type":"subscribe","symbol":"{ticker}"}}')
-        print(f'subscribed to {ticker} data from Finnhub')
+        write_log(f'subscribed to {ticker} data from Finnhub')
 
-    print('connected to Finnhub WS')
+    write_log('connected to Finnhub WS')
 
 ws = websocket.WebSocketApp(f'wss://ws.finnhub.io?token={FINNHUB_TOKEN}',
                               on_message = on_ws_message,
