@@ -1,6 +1,6 @@
 import os, websocket, time
 from json import loads, load, dump
-from threading import Thread
+from threading import Thread, Lock
 from datetime import datetime
 from queue import Queue
 from signal import signal, SIGTERM
@@ -32,29 +32,45 @@ credentials = Credentials(
     password=os.environ['DG_PASSWORD'],
 )
 
+trading_api_mutex = Lock()
 trading_api = TradingAPI(credentials=credentials)
 trading_api.connect()
 trading_api.get_account_info()
-write_log('connected to DEGIRO API')
+write_log('I: connected to DEGIRO API')
 
 # test writing to preorders file
 preorders = load(open(PREORDERS_FILE, 'r'))
 dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
 
 # poll trading_api periodically to keep session alive
-def request_account_info_periodically():
+def recreate_trading_api_periodically():
     global trading_api
     while True:
-        time.sleep(60)
+        # every 10 minutes, recreate session.
+        time.sleep(600)
+        trading_api_mutex.acquire()
         try:
-            trading_api.get_account_info()
-        except TimeoutError:
-            write_log('timeout error, reconnecting!')
             trading_api = TradingAPI(credentials=credentials)
             trading_api.connect()
             trading_api.get_account_info()
+        except:
+            write_log('E: failed to recreate TradingAPI')
+        finally:
+            trading_api_mutex.release()
 
-Thread(target=request_account_info_periodically, daemon=True).start()
+def poll_trading_api_periodically():
+    while True:
+        time.sleep(60)
+        trading_api_mutex.acquire()
+        try:
+            trading_api.get_account_info()
+        except:
+            write_log('E: unable to get_account_info from TradingAPI')
+        finally:
+            trading_api_mutex.release()
+
+Thread(target=recreate_trading_api_periodically, daemon=True).start()
+Thread(target=poll_trading_api_periodically, daemon=True).start()
 
 prices_queue = Queue()
 
@@ -101,7 +117,7 @@ def on_price_update(last_price):
 
     for preorder in preorders:
         if is_order_valid(preorder, last_price):
-            write_log(f'creating {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
+            write_log(f'I: creating {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
             order = Order(
                 action=Order.Action.SELL if preorder['action'] == 'SELL' else Order.Action.BUY,
                 order_type=Order.OrderType.LIMIT,
@@ -113,18 +129,24 @@ def on_price_update(last_price):
                             else Order.TimeType.GOOD_TILL_DAY
             )
 
-            checking_response = trading_api.check_order(order=order)
-            confirmation_id = checking_response.confirmation_id
-            confirmation_response = trading_api.confirm_order(
-                confirmation_id=confirmation_id,
-                order=order
-            )
+            trading_api_mutex.acquire()
+            try:
+                checking_response = trading_api.check_order(order=order)
+                confirmation_id = checking_response.confirmation_id
+                confirmation_response = trading_api.confirm_order(
+                    confirmation_id=confirmation_id,
+                    order=order
+                )
 
-            if confirmation_response != False:
-                write_log(f'created {preorder["action"]} order for {preorder["product_ticker"]}: ${preorder["price"]} x {preorder["amount"]}')
-                preorder['order_created'] = True
-                preorder['order_created_utc'] = datetime.utcnow().isoformat()
-                dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
+                if confirmation_response != False:
+                    write_log('I: created order')
+                    preorder['order_created'] = True
+                    preorder['order_created_utc'] = datetime.utcnow().isoformat()
+                    dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
+            except:
+                write_log('W: unable to create order')
+            finally:
+                trading_api_mutex.release()
 
 def on_ws_message(ws, message):
     # parse the trades object
@@ -144,14 +166,14 @@ def on_ws_message(ws, message):
         try:
             prices_queue.put({'v': v_sum, 'p': pv_sum / v_sum}, timeout=0.1)
         except:
-            write_log('WARNING: timeout for queue put expired. this should NEVER happen.')
+            write_log('W: timeout for queue put expired. this should NEVER happen.')
             pass
 
 def on_ws_error(ws, error):
-    write_log(error)
+    write_log(f'E: {error}')
 
 def on_ws_close(ws):
-    write_log('disconnected')
+    write_log('I: websocket disconnected, exiting.')
 
 def on_ws_open(ws):
     # find which tickers to subscribe to on the WS connection
@@ -163,9 +185,9 @@ def on_ws_open(ws):
     # subscribe to the tickers
     for ticker in tickers:
         ws.send(f'{{"type":"subscribe","symbol":"{ticker}"}}')
-        write_log(f'subscribed to {ticker} data from Finnhub')
+        write_log(f'I: subscribed to {ticker} data from Finnhub')
 
-    write_log('connected to Finnhub WS')
+    write_log('I: connected to Finnhub WS.')
 
 ws = websocket.WebSocketApp(f'wss://ws.finnhub.io?token={FINNHUB_TOKEN}',
                               on_message = on_ws_message,
