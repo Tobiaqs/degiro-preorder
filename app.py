@@ -39,12 +39,14 @@ dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
 
 # poll trading_api periodically to keep session alive
 def request_account_info_periodically():
+    global trading_api
     while True:
         time.sleep(60)
         try:
             trading_api.get_account_info()
         except TimeoutError:
             print('timeout error, reconnecting!')
+            trading_api = TradingAPI(credentials=credentials)
             trading_api.connect()
             trading_api.get_account_info()
 
