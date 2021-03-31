@@ -91,7 +91,9 @@ def price_aggregator():
         
         for symbol, sums in sums.items():
             if sums['v_sum'] > 0:
-                on_price_update(symbol, sums['pv_sum'] / sums['v_sum'])
+                price = sums['pv_sum'] / sums['v_sum']
+                on_price_update(symbol, price)
+                logging.debug(f'on_price_update("{symbol}", {price})')
 
         time.sleep(5)
 
