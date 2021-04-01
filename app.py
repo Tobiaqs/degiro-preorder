@@ -38,6 +38,13 @@ trading_api.connect()
 trading_api.get_account_info()
 logger.info('connected to DEGIRO API.')
 
+# set logging levels for libs to critical or higher
+for key, value in logging.Logger.manager.loggerDict.items():
+    if key.startswith('trading'):
+        logging.getLogger(key).setLevel(logging.CRITICAL + 1)
+    elif key != 'degiro-preorder':
+        logging.getLogger(key).setLevel(logging.CRITICAL)
+
 # test writing to preorders file
 preorders = load(open(PREORDERS_FILE, 'r'))
 dump(preorders, open(PREORDERS_FILE, 'w'), indent=4, sort_keys=True)
